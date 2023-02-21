@@ -66,10 +66,10 @@ location ~ ^/proxy/(https?)://?(.+/.*)$ {
 	block "fc00::" "fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
 	block "fe80::" "febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
 	block "ff00::" "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff";
-	unblock /index.html;
+	unblock ^/index\.html$;
 	allow_top_level_domain ".com";
 	allow_method POST;
-	require_header X-Requested-With "XMLHttpRequest";
+	require_header X-Requested-With "^XMLHttpRequest$";
 	block_access $1://$2;
 	
 	proxy_pass $1://$2$is_args$args;

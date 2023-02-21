@@ -59,10 +59,10 @@ typedef struct {
 	ngx_str_t key;
 	
 	// Value
-	ngx_str_t value;
+	ngx_regex_compile_t value;
 	
-	// Has character set
-	ngx_uint_t hasCharacterSet;
+	// Method
+	ngx_uint_t method;
 
 } RequiredHeader;
 
@@ -808,16 +808,19 @@ char *requireHeaderSetup(ngx_conf_t *configuration, ngx_command_t *command, void
 	const ngx_http_block_access_conf_t *locationConfiguration = data;
 	
 	// Get arguments
-	const ngx_str_t *arguments = configuration->args->elts;
+	ngx_str_t *arguments = configuration->args->elts;
 	
 	// Get key
 	const ngx_str_t *key = &arguments[1];
 	
 	// Get value
-	const ngx_str_t *value = &arguments[2];
+	ngx_str_t *value = &arguments[2];
 	
-	// Get has character set
-	const ngx_uint_t hasCharacterSet = configuration->args->nelts == 4 && arguments[3].len == sizeof("true") - sizeof((char)'\0') && !ngx_strncasecmp(arguments[3].data, (u_char *)"true", arguments[3].len);
+	// Check if case insensitive is provided
+	const ngx_uint_t caseInsensitive = value->len && value->data[0] == '~';
+	
+	// Get method
+	const ngx_str_t *method = (configuration->args->nelts == 4) ? &arguments[3] : NULL;
 	
 	// Get required headers
 	ngx_array_t **requiredHeaders = (ngx_array_t **)((char *)locationConfiguration + command->offset);
@@ -855,8 +858,52 @@ char *requireHeaderSetup(ngx_conf_t *configuration, ngx_command_t *command, void
 	// Set required header's key
 	requiredHeader->key = *key;
 	
+	// Check if case insensitive
+	if(caseInsensitive) {
+	
+		// Remove case insensitive character from value
+		--value->len;
+		++value->data;
+	}
+	
 	// Check if value is invalid
 	if(!value->len) {
+	
+		// Check if case insensitive
+		if(caseInsensitive) {
+		
+			// Add case insensitive character to value
+			++value->len;
+			--value->data;
+		}
+		
+		// Log error
+		ngx_conf_log_error(NGX_LOG_EMERG, configuration, 0, "invalid parameter \"%V\"", value);
+		
+		// Return configuration error
+		return NGX_CONF_ERROR;
+	}
+	
+	// Initialize required header's value
+	ngx_memzero(&requiredHeader->value, sizeof(ngx_regex_compile_t));
+	requiredHeader->value.pattern = *value;
+	requiredHeader->value.pool = configuration->pool;
+	requiredHeader->value.options = caseInsensitive ? NGX_REGEX_CASELESS : 0;
+	
+	u_char errstr[NGX_MAX_CONF_ERRSTR];
+	requiredHeader->value.err.len = sizeof(errstr);
+	requiredHeader->value.err.data = errstr;
+	
+	// Check if compiling required header's value failed or the required header's value contains captures
+	if(ngx_regex_compile(&requiredHeader->value) != NGX_OK || requiredHeader->value.captures) {
+	
+		// Check if case insensitive
+		if(caseInsensitive) {
+		
+			// Add case insensitive character to value
+			++value->len;
+			--value->data;
+		}
 	
 		// Log error
 		ngx_conf_log_error(NGX_LOG_EMERG, configuration, 0, "invalid parameter \"%V\"", value);
@@ -865,21 +912,78 @@ char *requireHeaderSetup(ngx_conf_t *configuration, ngx_command_t *command, void
 		return NGX_CONF_ERROR;
 	}
 	
-	// Set required header's value
-	requiredHeader->value = *value;
+	// Check if method isn't provided
+	if(!method) {
 	
-	// Check if has character set is invalid
-	if(configuration->args->nelts == 4 && !hasCharacterSet && (arguments[3].len != sizeof("false") - sizeof((char)'\0') || ngx_strncasecmp(arguments[3].data, (u_char *)"false", arguments[3].len))) {
+		// Set required header's method
+		requiredHeader->method = UINTMAX_MAX;
+	}
+	
+	// Otherwise check if method is GET
+	else if(method->len == sizeof("GET") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"GET", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_GET;
+	}
+	
+	// Otherwise check if method is HEAD
+	else if(method->len == sizeof("HEAD") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"HEAD", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_HEAD;
+	}
+	
+	// Otherwise check if method is POST
+	else if(method->len == sizeof("POST") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"POST", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_POST;
+	}
+	
+	// Otherwise check if method is PUT
+	else if(method->len == sizeof("PUT") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"PUT", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_PUT;
+	}
+	
+	// Otherwise check if method is DELETE
+	else if(method->len == sizeof("DELETE") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"DELETE", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_DELETE;
+	}
+	
+	// Otherwise check if method is OPTIONS
+	else if(method->len == sizeof("OPTIONS") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"OPTIONS", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_OPTIONS;
+	}
+	
+	// Otherwise check if method is TRACE
+	else if(method->len == sizeof("TRACE") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"TRACE", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_TRACE;
+	}
+	
+	// Otherwise check if method is PATCH
+	else if(method->len == sizeof("PATCH") - sizeof((char)'\0') && !ngx_strncasecmp(method->data, (u_char *)"PATCH", method->len)) {
+	
+		// Set required header's method
+		requiredHeader->method = NGX_HTTP_PATCH;
+	}
+	
+	// Otherwise
+	else {
 	
 		// Log error
-		ngx_conf_log_error(NGX_LOG_EMERG, configuration, 0, "invalid parameter \"%V\"", &arguments[3]);
+		ngx_conf_log_error(NGX_LOG_EMERG, configuration, 0, "invalid parameter \"%V\"", method);
 		
 		// Return configuration error
 		return NGX_CONF_ERROR;
 	}
-	
-	// Set required header's has character set
-	requiredHeader->hasCharacterSet = hasCharacterSet;
 	
 	// Return configuration ok
 	return NGX_CONF_OK;
@@ -1179,83 +1283,102 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 			// Get required header
 			const RequiredHeader *requiredHeader = &requiredHeaders[i];
 			
-			// Go through all headers
-			ngx_uint_t headerFound = 0;
-			const ngx_list_part_t *part = &request->headers_in.headers.part;
-			const ngx_table_elt_t *header = part->elts;
-			for(ngx_uint_t j = 0;; ++j) {
+			// Check if requried header's method is applicable to the current request
+			if(requiredHeader->method & request->method) {
 			
-				// Check if at the end of the part
-				if(j >= part->nelts) {
+				// Go through all headers
+				ngx_uint_t headerFound = 0;
+				const ngx_list_part_t *part = &request->headers_in.headers.part;
+				const ngx_table_elt_t *header = part->elts;
+				for(ngx_uint_t j = 0;; ++j) {
 				
-					// Check if at last part
-					if(!part->next) {
+					// Check if at the end of the part
+					if(j >= part->nelts) {
 					
-						// Break
-						break;
-					}
-					
-					// Go to next part
-					part = part->next;
-					header = part->elts;
-					j = 0;
-				}
-				
-				// Check if header is invaid
-				if(!header[j].hash) {
-				
-					// Continue
-					continue;
-				}
-				
-				// Check if header is for the required header
-				if(header[j].key.len == requiredHeader->key.len && !ngx_strncasecmp(header[j].key.data, requiredHeader->key.data, requiredHeader->key.len)) {
-				
-					// Set header found
-					headerFound = 1;
-				
-					// Check if required header has a character set
-					if(requiredHeader->hasCharacterSet) {
-					
-						// Check if header's value isn't the required value
-						if(header[j].value.len < requiredHeader->value.len || ngx_strncmp(header[j].value.data, requiredHeader->value.data, requiredHeader->value.len) || (header[j].value.len != requiredHeader->value.len && header[j].value.data[requiredHeader->value.len] != ';')) {
-						
-							// Set invalid headers
-							invalidHeaders = 1;
+						// Check if at last part
+						if(!part->next) {
 						
 							// Break
 							break;
 						}
+						
+						// Go to next part
+						part = part->next;
+						header = part->elts;
+						j = 0;
 					}
 					
-					// Otherwise
-					else {
+					// Check if header is invaid
+					if(!header[j].hash) {
 					
-						// Check if header's value isn't the required value
-						if(header[j].value.len != requiredHeader->value.len || ngx_strncmp(header[j].value.data, requiredHeader->value.data, header[j].value.len)) {
+						// Continue
+						continue;
+					}
+					
+					// Check if header is for the required header
+					if(header[j].key.len == requiredHeader->key.len && !ngx_strncasecmp(header[j].key.data, requiredHeader->key.data, requiredHeader->key.len)) {
+					
+						// Set header found
+						headerFound = 1;
 						
+						// Check if header's value isn't the required value
+						if(ngx_regex_exec(requiredHeader->value.regex, &header[j].value, NULL, 0) < 0) {
+					
 							// Set invalid headers
 							invalidHeaders = 1;
-						
-							// Break
-							break;
+							
+							// Go through all other required headers
+							for(ngx_uint_t k = 0; k < locationConfiguration->requiredHeaders->nelts; ++k) {
+							
+								// Check if required header isn't the same
+								if(k != i) {
+							
+									// Get other required header
+									const RequiredHeader *otherRequiredHeader = &requiredHeaders[k];
+									
+									// Check if other requried header's method is applicable to the current request
+									if(otherRequiredHeader->method & request->method) {
+									
+										// Check if header is for the other required header
+										if(header[j].key.len == otherRequiredHeader->key.len && !ngx_strncasecmp(header[j].key.data, otherRequiredHeader->key.data, otherRequiredHeader->key.len)) {
+										
+											// Check if header's value is the other required value
+											if(ngx_regex_exec(otherRequiredHeader->value.regex, &header[j].value, NULL, 0) >= 0) {
+											
+												// Clear invalid headers
+												invalidHeaders = 0;
+												
+												// Break
+												break;
+											}
+										}
+									}
+								}
+							}
+							
+							// Check if headers are still invalid
+							if(invalidHeaders) {
+							
+								// Break
+								break;
+							}
 						}
 					}
 				}
-			}
-			
-			// Check if required header doesn't exist
-			if(!headerFound) {
-			
-				// Set invalid headers
-				invalidHeaders = 1;
-			}
-			
-			// Check if headers are invalid
-			if(invalidHeaders) {
-			
-				// Break
-				break;
+				
+				// Check if required header doesn't exist
+				if(!headerFound) {
+				
+					// Set invalid headers
+					invalidHeaders = 1;
+				}
+				
+				// Check if headers are invalid
+				if(invalidHeaders) {
+				
+					// Break
+					break;
+				}
 			}
 		}
 		
