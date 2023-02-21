@@ -1324,10 +1324,8 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 						// Check if header's value isn't the required value
 						if(ngx_regex_exec(requiredHeader->value.regex, &header[j].value, NULL, 0) < 0) {
 					
-							// Set invalid headers
-							invalidHeaders = 1;
-							
 							// Go through all other required headers
+							ngx_uint_t validHeader = 0;
 							for(ngx_uint_t k = 0; k < locationConfiguration->requiredHeaders->nelts; ++k) {
 							
 								// Check if required header isn't the same
@@ -1345,8 +1343,8 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 											// Check if header's value is the other required value
 											if(ngx_regex_exec(otherRequiredHeader->value.regex, &header[j].value, NULL, 0) >= 0) {
 											
-												// Clear invalid headers
-												invalidHeaders = 0;
+												// Set valid header
+												validHeader = 1;
 												
 												// Break
 												break;
@@ -1356,8 +1354,11 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 								}
 							}
 							
-							// Check if headers are still invalid
-							if(invalidHeaders) {
+							// Check if header isn't valid
+							if(!validHeader) {
+							
+								// Set invalid headers
+								invalidHeaders = 1;
 							
 								// Break
 								break;
