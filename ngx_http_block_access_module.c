@@ -1173,6 +1173,16 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 		return NGX_HTTP_FORBIDDEN;
 	}
 	
+	// Check if URL isn't using IP to communicate
+	if(url.family != AF_INET && url.family != AF_INET6) {
+	
+		// Log info
+		ngx_log_error(NGX_LOG_INFO, request->connection->log, 0, "blocked access to non HTTP or HTTPS resource");
+	
+		// Return forbidden
+		return NGX_HTTP_FORBIDDEN;
+	}
+	
 	// Check if allowed methods exist
 	if(locationConfiguration->allowedMethods) {
 	
