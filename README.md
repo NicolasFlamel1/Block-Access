@@ -11,7 +11,7 @@ unzip "./master.zip"
 wget "https://nginx.org/download/nginx-$(nginx -v 2>&1 | awk '{print $3}'  | awk -F'/' '{print $2}').tar.gz"
 tar -xf "./nginx-$(nginx -v 2>&1 | awk '{print $3}'  | awk -F'/' '{print $2}').tar.gz"
 cd "./nginx-$(nginx -v 2>&1 | awk '{print $3}'  | awk -F'/' '{print $2}')"
-echo $(nginx -V 2>&1 >/dev/null | grep -oP '(?<=^configure arguments: ).*?(?= --add-dynamic-module)') --add-dynamic-module="../Block-Access-master" | xargs "./configure"
+echo $(nginx -V 2>&1 >/dev/null | grep -oP '(?<=^configure arguments: ).*?(?= --add-dynamic-module|$)') --add-dynamic-module="../Block-Access-master" | xargs "./configure"
 make modules
 sudo mv "./objs/ngx_http_block_access_module.so" "/usr/share/nginx/modules/"
 ```

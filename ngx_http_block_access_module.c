@@ -1299,7 +1299,7 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 				// Go through all headers
 				ngx_uint_t headerFound = 0;
 				const ngx_list_part_t *part = &request->headers_in.headers.part;
-				const ngx_table_elt_t *header = part->elts;
+				ngx_table_elt_t *header = part->elts;
 				for(ngx_uint_t j = 0;; ++j) {
 				
 					// Check if at the end of the part
