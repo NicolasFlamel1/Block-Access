@@ -63,6 +63,9 @@ typedef struct {
 	
 	// Method
 	ngx_uint_t method;
+	
+	// Optional
+	ngx_uint_t optional;
 
 } RequiredHeader;
 
@@ -811,7 +814,10 @@ char *requireHeaderSetup(ngx_conf_t *configuration, ngx_command_t *command, void
 	ngx_str_t *arguments = configuration->args->elts;
 	
 	// Get key
-	const ngx_str_t *key = &arguments[1];
+	ngx_str_t *key = &arguments[1];
+	
+	// Get if optional
+	const ngx_uint_t optional = key->len && key->data[0] == '!';
 	
 	// Get value
 	ngx_str_t *value = &arguments[2];
@@ -845,9 +851,25 @@ char *requireHeaderSetup(ngx_conf_t *configuration, ngx_command_t *command, void
 		return NGX_CONF_ERROR;
 	}
 	
+	// Check if optional
+	if(optional) {
+	
+		// Remove optional character from key
+		--key->len;
+		++key->data;
+	}
+	
 	// Check if key is invalid
 	if(!key->len) {
 	
+		// Check if optional
+		if(optional) {
+		
+			// Add optional character from key
+			++key->len;
+			--key->data;
+		}
+		
 		// Log error
 		ngx_conf_log_error(NGX_LOG_EMERG, configuration, 0, "invalid parameter \"%V\"", key);
 		
@@ -984,6 +1006,9 @@ char *requireHeaderSetup(ngx_conf_t *configuration, ngx_command_t *command, void
 		// Return configuration error
 		return NGX_CONF_ERROR;
 	}
+	
+	// Set required header's optional
+	requiredHeader->optional = optional;
 	
 	// Return configuration ok
 	return NGX_CONF_OK;
@@ -1377,8 +1402,8 @@ ngx_int_t accessHandler(ngx_http_request_t *request) {
 					}
 				}
 				
-				// Check if required header doesn't exist
-				if(!headerFound) {
+				// Check if required header doesn't exist and it isn't optional
+				if(!headerFound && !requiredHeader->optional) {
 				
 					// Set invalid headers
 					invalidHeaders = 1;
