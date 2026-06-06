@@ -15,6 +15,7 @@ echo $(nginx -V 2>&1 >/dev/null | grep -oP '(?<=^configure arguments: ).*?(?= --
 make modules
 sudo mv "./objs/ngx_http_block_access_module.so" "/usr/share/nginx/modules/"
 ```
+If you installed Nginx through a package manager, then you should change the `wget "https://nginx.org/download/nginx-$(nginx -v 2>&1 | awk '{print $3}'  | awk -F'/' '{print $2}').tar.gz"` line to download the same Nginx source code that your package manager used, for example `apt source nginx`.
 
 Add the following line to the `top-level` context in your Nginx configuration file, `/etc/nginx/nginx.conf`, to enable this module.
 ```
